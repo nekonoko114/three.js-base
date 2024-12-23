@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise@4.0.0/dist/umd/simplex-noise.min.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: black;
+        color: white;
+        font-family: sans-serif;
+      }
+      .loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      .myCanvas {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="loading">Loading...</p>
+    <script>
+      init();
+      
+
+      async function init() {
+        // SimplexNoiseの初期化
+        const noise = new SimplexNoise();
+
+        // 画像を読み込む
+        const image = new Image();
+        image.src = "images/secondGenesis.png";
+        await image.decode();
+
+        // PIXI.jsのアプリケーションを作成
+        const app = new PIXI.Application({
+          antialias: true,
+          resizeTo: window,
+          backgroundColor: 0x000000,
+          resolution: devicePixelRatio,
+        });
+
+        app.view.classList.add("myCanvas");
+        document.body.appendChild(app.view);
+
+        const DOT_SIZE = 2;
+
+        // 画像サイズ
+        const imageW = image.width;
+        const imageH = image.height;
+        const lengthW = imageW / DOT_SIZE;
+        const lengthH = imageH / DOT_SIZE;
+
+        // パーティクルコンテナ
+        const container = new PIXI.Container();
+        app.stage.addChild(container);
+
+        const texture = PIXI.Texture.from(image);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = imageW;
+        canvas.height = imageH;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+
+        const dots = [];
+        for (let i = 0; i < lengthW * lengthH; i++) {
+          const x = (i % lengthW) * DOT_SIZE;
+          const y = Math.floor(i / lengthW) * DOT_SIZE;
+
+          const dotData = context.getImageData(
+            x + Math.floor(DOT_SIZE / 2),
+            y + Math.floor(DOT_SIZE / 2),
+            1,
+            1
+          );
+
+          const alpha = dotData.data[3];
+          if (alpha === 0) continue;
+
+          const texture2 = new PIXI.Texture(texture.baseTexture, new PIXI.Rectangle(x, y, DOT_SIZE, DOT_SIZE));
+          const dot = new Dot(texture2);
+          dot.anchor.set(0.5);
+          dot.x = x - imageW / 2;
+          dot.y = y - imageH / 2;
+          dot.offsetIndex = i;
+          container.addChild(dot);
+
+          dots.push(dot);
+        }
+
+        const tl = gsap.timeline({ repeat: -1 });
+
+        for (let i = 0; i < dots.length; i++) {
+          const dot = dots[i];
+          const index = dot.offsetIndex;
+
+          const nx = (index % lengthW) / lengthW;
+          const ny = Math.floor(index / lengthW) / lengthH;
+
+          const px = noise.noise2D(nx * 4, ny * 3);
+          const py = noise.noise2D(nx * 3, ny * 2);
+
+          const baseDelay = (dot.offsetIndex % lengthW) * 0.001 + Math.random() * 0.2;
+
+          const perlinAmpX = 1500 * (nx * 2 + 1);
+          const perlinAmpY = 500 * (nx * 2 + 1);
+          const randomAmp = 10 * (nx * 2 + 1);
+
+          const scale = nx * 3 + 1;
+
+          tl.from(
+            dot,
+            {
+              x: "-=" + (perlinAmpX * px + randomAmp * (Math.random() - 0.5)),
+              y: "-=" + (perlinAmpY * py + randomAmp * (Math.random() - 0.5)),
+              alpha: 0,
+              scaleX: scale,
+              scaleY: scale,
+              duration: 2,
+              ease: "expo.inOut",
+            },
+            baseDelay
+          ).to(
+            dot,
+            {
+              x: "+=" + (perlinAmpX * px + randomAmp * (Math.random() - 0.5)),
+              y: "+=" + (perlinAmpY * py + randomAmp * (Math.random() - 0.5)),
+              alpha: 0,
+              scaleX: scale,
+              scaleY: scale,
+              duration: 2.5,
+              ease: "expo.out",
+            },
+            ">2"
+          );
+        }
+
+        tl.fromTo(
+          container.scale,
+          { x: 0.4, y: 0.4 },
+          { x: 0.5, y: 0.5, duration: 5, ease: "none" },
+          0
+        );
+
+        const resize = () => {
+          container.x = app.screen.width / 2;
+          container.y = app.screen.height / 2;
+        };
+        window.addEventListener("resize", resize);
+        resize();
+
+        document.querySelector(".loading").hidden = true;
+      }
+
+      class Dot extends PIXI.Sprite {
+        constructor(texture) {
+          super(texture);
+        }
+        get scaleX() {
+          return this.scale.x;
+        }
+        set scaleX(value) {
+          this.scale.x = value;
+        }
+        get scaleY() {
+          return this.scale.y;
+        }
+        set scaleY(value) {
+          this.scale.y = value;
+        }
+        offsetIndex = -1;
+      }
+    </script>
+  </body>
+</html>
